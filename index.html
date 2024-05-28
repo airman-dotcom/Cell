@@ -5,7 +5,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width">
   <title>replit</title>
-  <link href="style.css" rel="stylesheet" type="text/css" />
+  <style>
+    * {
+      width: 100%;
+      height: 100%;
+      overflow-x: hidden;
+      overflow-y: hidden;
+    }
+  </style>
 </head>
 
 <body>
@@ -15,14 +22,55 @@
 
 <script type="module">
   import kaboom from "https://unpkg.com/kaboom@3000.0.1/dist/kaboom.mjs";
+ 
   kaboom({
     width: innerWidth,
     debug: true,
     height: innerHeight,
   });
+  alert(width())
+  alert(height())
   //make a rectangle at the bottom of the screen
-  add([rect(width(), 50), color(BLACK), pos(0, height() - 50)]);
-
+  function render_barriers(){
+    add([
+    rect(width(), 50),
+    color(BLACK),
+    pos(0, height() - 50),
+    area(),
+    body({isStatic: true}),
+    "wall",
+    "bottom"
+  ]);
+  add([
+    rect(50, height()),
+    color(BLACK),
+    pos(0,0),
+    area(),
+    body({isStatic: true}),
+    "wall",
+    "left"
+  ]);
+  add([
+    rect(width(), 50),
+    color(BLACK),
+    pos(0, 0),
+    area(),
+    body({isStatic: true}),
+    "wall",
+    "top"
+  ]);
+  add([
+    rect(50, height()),
+    color(BLACK),
+    pos(width()-50,0),
+    area(),
+    body({isStatic: true}),
+    "wall",
+    "right"
+  ]);
+  }
+  
+  
   const db = {
     phosphate: {
       polar: false,
@@ -46,21 +94,28 @@
     },
   };
   let vecs = {};
-  const ENERGY = 1600;
-  const REPEL_COEF = -4;
+  const TEMP_CONST = true
+  let ENERGY = 1600;
+  if (TEMP_CONST){
+    ENERGY = width() * (1600/5929);
+  }
+  const REPEL_COEF = width() * (-5/5929);
   const ATTRACT_COEF = 8;
   const ENABLE_BONDING = false;
+  const NUM_MOLECULES = width() * (20/5929)
+  const MOLECULE_SIZE = NUM_MOLECULES * (40/20)
   let parents = {};
   let deltas = {};
-  const deltaRadius = 100;
+  let bonds = {};
+  const deltaRadius = MOLECULE_SIZE + 80;
   let deltaThetas = {};
   let deltaVecs = {}
   function spawn(num, type) {
     for (let x = 0; x < num; x++) {
-      let sp = pos(Math.random() * width(), Math.random() * height())
+      let sp = pos(Math.random() * width() + 50, Math.random() * height() - 50)
       let d = add([
         sp,
-        circle(20),
+        circle(MOLECULE_SIZE),
         body({ gravityScale: 0 }),
         area(),
         offscreen({ pause: true }),
@@ -133,7 +188,10 @@
       //x,y,theta
     }
   }
-  spawn(10, "water");
+  
+  
+  spawn(NUM_MOLECULES, "water");
+  render_barriers()
 
   /*add([
     rect(200, 10),
@@ -333,36 +391,56 @@
     }
   })
 
-  onCollide("positive", "negative", (n1, n2) => {
-    console.log("cc")
-    let n1Vec = vec2(n1.pos.x, n1.pos.y)
-    let n2Vec = vec2(n2.pos.x, n2.pos.y)
-    //Force of repulsion exerted from n2 on n1
-    let n1n2 = Vec2.fromAngle(n1Vec.angle(n2Vec))
-    n1n2 = n1n2.scale(-1)
-    //Vice Versa
-    let n2n1 = Vec2.fromAngle(n2Vec.angle(n1Vec))
-    n2n1 = n2n1.scale(-1)
-    let p1 = deltas[n1.id]
-    let p2 = deltas[n2.id]
-    if (deltaVecs[p1.id] == undefined) {
-      deltaVecs[p1.id] = [n1n2]
+  onCollide("positive", "negative", (p, n) => {
+
+    let t1 = deltas[p.id];
+    let t2 = deltas[n.id];
+    if (t1.is("bond") || t2.is("bond")){
+      return
     }
-    else {
-      let x = deltaVecs[p1.id]
-      x.push(n1n2)
-      deltaVecs[p1.id] = x
+    if (t1 == t2) {
+      return
     }
-    if (deltaVecs[p2.id] == undefined) {
-      deltaVecs[p2.id] = [n2n1]
+    let strength = Math.random() * 40 + 4;
+    bonds[t1.id] = ["head", strength]
+    bonds[t2.id] = ["follower", t1, t1.pos.x - t2.pos.x, t1.pos.y - t2.pos.y]
+    t1.use(color(MAGENTA))
+    t2.use(color(YELLOW))
+    t1.use("bond")
+    t2.use("bond")
+  })
+
+
+  onUpdate("t", (p) => {
+
+    if (p.pos.x > width()- 50){
+      p.pos.x = width() - 70
     }
-    else {
-      let x = deltaVecs[p2.id]
-      x.push(n2n1)
-      deltaVecs[p2.id] = x
+
+    if (p.pos.y > height()-50){
+      debug.log("y")
+      p.pos.y = height() - 70
+    }
+    if (p.pos.y < 50){
+      p.pos.y = 70
+    }
+    if (p.pos.x < 50){
+      p.pos.x = 70
     }
   })
 
+  onCollide("t", "wall", (t,w) => {
+
+    if (w.is("top")){
+      t.pos.y = 70
+    }  if (w.is("bottom")){
+      t.pos.y = height() - 70
+    }  if (w.is("left")){
+      t.pos.x = 70
+    } if (w.is("right")) {
+      t.pos.x = width() - 70
+    }
+  })
 
   onCollide("negative", "negative", (n1, n2) => {
     console.log("aa")
@@ -421,10 +499,7 @@
     parents[u.id] = z;
   }
 
-
-  function sim() {
-    onUpdate("particle", (c) => {
-      if (c.is("t")) {
+function norm_move(c){
         let averageTheta = rand(0, 350);
         let imp = Vec2.fromAngle(averageTheta).scale(
           ENERGY / (2),
@@ -442,10 +517,26 @@
         c.move(imp)
 
         deltaVecs[c.id] = []
-      }
-      else if (c.is("bond")) {
-        let parent = parents[c.id];
-        c.move(vecs[parent.id]);
+}
+
+
+  function sim() {
+    onUpdate("particle", (c) => {
+      if (c.is("t")) {
+        if (bonds[c.id] != undefined){
+          let status = bonds[c.id][0];
+          if (status == "follower"){
+            let head = bonds[c.id][1]
+            let newx = head.pos.x - bonds[c.id][2];
+            let newy = head.pos.y - bonds[c.id][3];
+            c.pos.x = newx;
+            c.pos.y = newy;
+          } else {
+            norm_move(c)
+          }
+        }else {
+          norm_move(c)
+        }
       }
       else if (c.is("delta")) {
         let parent = deltas[c.id];
