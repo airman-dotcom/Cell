@@ -438,25 +438,34 @@ function complex_bond(p1, p2){
     if (t1.is("bond") && !t2.is("bond")){
       if (bonds[t1.id][0] == "follower"){
         let head = bonds[t1.id][1];
+        if (head.pos == undefined){
+          return;
+        }
         bonds[t2.id] = ["follower", head, head.pos.x - t2.pos.x, head.pos.y - t2.pos.y, strength]
         bonds[head.id][1] += strength / 2;
       } else {
-        bonds[t2.id] = ["follower", head, t1.pos.x - t2.pos.x, t1.pos.y - t2.pos.y, strength]
+        bonds[t2.id] = ["follower", t2, t1.pos.x - t2.pos.x, t1.pos.y - t2.pos.y, strength]
         bonds[t1.id][1] += strength / 2;
       }
+      t2.use("bond")
     }
     else if (!t1.is("bond") && t2.is("bond")){
       if (bonds[t2.id][0] == "follower"){
         let head = bonds[t2.id][1];
+        if (head == undefined){
+          return;
+        }
         bonds[t1.id] = ["follower", head, head.pos.x - t1.pos.x, head.pos.y - t1.pos.y, strength]
         bonds[head.id][1] += strength / 2;
       } else {
-        bonds[t1.id] = ["follower", head, t2.pos.x - t1.pos.x, t2.pos.y - t1.pos.y, strength]
+        bonds[t1.id] = ["follower", t2, t2.pos.x - t1.pos.x, t2.pos.y - t1.pos.y, strength]
         bonds[t2.id][1] += strength / 2;
       }
+      t1.use("bond")
     } else if (t1.is("bond") && t2.is("bond")){
+      //return;
       complex_bond(t1,t2);
-    } else {
+    } else if (!t1.is("bond") && !t2.is("bond")){ {
     if (t1 == t2) {
       return
     }
@@ -468,7 +477,8 @@ function complex_bond(p1, p2){
       t1.use("bond")
       t2.use("bond")
   }
-  })
+  }
+});
 
 
   onUpdate("t", (p) => {
@@ -586,10 +596,14 @@ function norm_move(c){
   function sim() {
     onUpdate("particle", (c) => {
       if (c.is("t")) {
+        console.log(bonds)
         if (bonds[c.id] != undefined){
           let status = bonds[c.id][0];
           if (status == "follower"){
-            let head = bonds[c.id][1]
+            let head = bonds[c.id][1];
+            if (head.pos == undefined){
+              return;
+            }
             let newx = head.pos.x - bonds[c.id][2];
             let newy = head.pos.y - bonds[c.id][3];
             c.pos.x = newx;
