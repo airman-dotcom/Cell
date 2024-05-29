@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width">
+  <title>replit</title>
+  <style>
+    * {
+      width: 100%;
+      height: 100%;
+      overflow-x: hidden;
+      overflow-y: hidden;
+    }
+  </style>
+</head>
+
+<body>
+
+</body>
+
+
+<script type="module">
+  import kaboom from "https://unpkg.com/kaboom@3000.0.1/dist/kaboom.mjs";
+ 
+  kaboom({
+    width: innerWidth,
+    debug: true,
+    height: innerHeight,
+  });
+  //make a rectangle at the bottom of the screen
+  function render_barriers(){
+    add([
+    rect(width(), 50),
+    color(BLACK),
+    pos(0, height() - 50),
+    area(),
+    body({isStatic: true}),
+    "wall",
+    "bottom"
+  ]);
+  add([
+    rect(50, height()),
+    color(BLACK),
+    pos(0,0),
+    area(),
+    body({isStatic: true}),
+    "wall",
+    "left"
+  ]);
+  add([
+    rect(width(), 50),
+    color(BLACK),
+    pos(0, 0),
+    area(),
+    body({isStatic: true}),
+    "wall",
+    "top"
+  ]);
+  add([
+    rect(50, height()),
+    color(BLACK),
+    pos(width()-50,0),
+    area(),
+    body({isStatic: true}),
+    "wall",
+    "right"
+  ]);
+  }
+  
+  
+  const db = {
+    phosphate: {
+      polar: false,
+      charge: -1,
+    },
+    serine: {
+      polar: true,
+      charge: 0,
+    },
+    hydrophobic: {
+      name: "phospholipid head",
+      components: ["phosphate", "serine"],
+      polar: true,
+      color: GREEN,
+      charge: -1,
+    },
+    water: {
+      color: BLUE,
+      polar: true,
+      charge: 0,
+    },
+  };
+  let vecs = {};
+  const TEMP_CONST = true
+  let ENERGY = 1600;
+  if (TEMP_CONST){
+    ENERGY = width() * (800/5929);
+  }
+  const REPEL_COEF = width() * (-0.1/5929);
+  const ATTRACT_COEF = 8;
+  const ENABLE_BONDING = false;
+  const NUM_MOLECULES = width() * (40/5929)
+  //const NUM_MOLECULES = 2
+  const MOLECULE_SIZE = NUM_MOLECULES * (25/20)
+  let parents = {};
+  let deltas = {};
+  let bonds = {};
+  const deltaRadius = MOLECULE_SIZE + 80;
+  let deltaThetas = {};
+  let deltaVecs = {}
+  alert(NUM_MOLECULES)
+  function spawn(num, type) {
+    for (let x = 0; x < num; x++) {
+      let sp = pos(Math.random() * width() + 50, Math.random() * height() - 50)
+      let d = add([
+        sp,
+        circle(MOLECULE_SIZE),
+        body({ gravityScale: 0 }),
+        area(),
+        rotate(0),
+        color(db[type].color),
+        `${type}`,
+        z(10),
+        "particle",
+        `${x}`,
+        "t",
+      ]);
+      let zz = add([
+        circle(deltaRadius),
+        pos(d.pos.x + (-0.791 * (deltaRadius + 50)), d.pos.y + (+0.612 * (deltaRadius + 50))),
+        area(),
+        color(CYAN),
+        `${d.id}`,
+        "particle",
+        opacity(0.7),
+        "delta",
+        "positive",
+      ]);
+      let zy = add([
+        circle(deltaRadius),
+        pos(d.pos.x + (-0.1 * (deltaRadius + 50)), d.pos.y + (-1 * (deltaRadius + 50))),
+        area(),
+        color(RED),
+        `${d.id}`,
+        "particle",
+        opacity(0.7),
+        "delta",
+        "negative",
+      ]);
+      let zw = add([
+        circle(deltaRadius),
+        pos(d.pos.x + (+0.1 * (deltaRadius + 50)), d.pos.y + (-1 * (deltaRadius + 50))),
+        area(),
+        color(RED),
+        `${d.id}`,
+        "particle",
+        opacity(0.7),
+        "delta",
+        "negative"
+      ])
+      let zx = add([
+        circle(deltaRadius),
+        pos(d.pos.x + (0.791 * (deltaRadius + 50)), d.pos.y + (+0.612 * (deltaRadius + 50))),
+        area(),
+        color(CYAN),
+        `${d.id}`,
+        "particle",
+        opacity(0.7),
+        "delta",
+        "positive",
+      ])
+      deltas[zz.id] = d;
+      deltas[zy.id] = d;
+      deltas[zx.id] = d;
+      deltas[zw.id] = d;
+      deltaThetas[d.id] = 0;
+      deltaThetas[zy.id] = [Math.PI + 0.659, 0];
+      deltaThetas[zz.id] = [Math.PI - 0.828, 0];
+      deltaThetas[zx.id] = [2 * Math.PI - 0.659, 0]
+      deltaThetas[zw.id] = [0.828, 0];
+      vecs[d.id] = [[], [], []];
+      //x,y,theta
+    }
+  }
+  
+  
+  spawn(NUM_MOLECULES, "water");
+  render_barriers()
+
+  /*add([
+    rect(200, 10),
+    pos(50,50),
+    area(),
+    body({gravityScale:0})
+  ])*/
+
+  onCollide("hydrophobic", "hydrophobic", (c, d) => {
+    if (!ENABLE_BONDING) {
+      return;
+    }
+    if (!c.is("bond") && !d.is("bond")) {
+      d.unuse(body());
+      d.use("bond1");
+      d.use("bond");
+      d.unuse("t");
+      parents[d.id] = c;
+      c.add([circle(0.00001)]);
+      c.color = MAGENTA;
+      d.color = MAGENTA;
+      d.pos.x = c.pos.x + 20;
+      d.pos.y = c.pos.y + 30;
+      c.use("bond1");
+      c.use("bond");
+    } else if (!c.is("bond") && d.is("bond1")) {
+      //a blue + not green
+      //no bond + one bonded on
+
+      c.unuse(body());
+      c.use("bond1");
+      c.unuse("t");
+      c.use("bond");
+
+      if (Object.keys(parents).includes(d.id.toString())) {
+        parents[c.id] = parents[d.id];
+        let u = parents[d.id];
+        c.pos.x = d.pos.x - 40;
+        c.pos.y = d.pos.y + 10;
+      } else {
+        parents[c.id] = d;
+        c.pos.x = d.pos.x - 40;
+        c.pos.y = d.pos.y + 10;
+      
+      }
+      d.add([circle(0.00001)]);
+      d.color = CYAN;
+      c.color = MAGENTA;
+      d.use("bond2");
+      d.unuse("bond1");
+ 
+    } else if (c.is("bond1") && d.is("bond1")) {
+      if (parents[c.id] == d || parents[d.id] == c) return;
+
+      c.use("bond2");
+      d.use("bond2");
+      c.unuse("bond1");
+      d.unuse("bond1");
+      let isParent = findChild(c) != null;
+      if (Object.keys(parents).includes(d.id.toString())) {
+        if (!isParent) {
+          //ischild
+          parents[c.id] = parents[d.id];
+        } else {
+          fixchilds(c, parents[d.id]);
+        }
+
+      } else {
+        fixchilds(c, d);
+        parents[c.id] = d;
+      
+      }
+
+      c.pos.x = d.pos.x - 40;
+      c.pos.y = d.pos.y + 10;
+    }
+  });
+
+
+  onCollide("water", "water", (c, d) => {
+    if (!ENABLE_BONDING) {
+      return;
+    }
+    if (!c.is("bond") && !d.is("bond")) {
+      d.unuse(body());
+      d.use("bond1");
+      d.use("bond");
+      d.unuse("t");
+      parents[d.id] = c;
+      c.add([circle(0.00001)]);
+      c.color = GREEN;
+      d.color = GREEN;
+      d.pos.x = c.pos.x + 20;
+      d.pos.y = c.pos.y + 30;
+      c.use("bond1");
+      c.use("bond");
+    } else if (!c.is("bond") && d.is("bond1")) {
+      //a blue + not green
+      //no bond + one bonded on
+
+      c.unuse(body());
+      c.use("bond1");
+      c.unuse("t");
+      c.use("bond");
+
+      if (Object.keys(parents).includes(d.id.toString())) {
+        parents[c.id] = parents[d.id];
+        let u = parents[d.id];
+        c.pos.x = d.pos.x - 40;
+        c.pos.y = d.pos.y + 10;
+      } else {
+        parents[c.id] = d;
+        c.pos.x = d.pos.x - 40;
+        c.pos.y = d.pos.y + 10;
+      }
+      d.add([circle(0.00001)]);
+      d.color = BLACK;
+      c.color = GREEN;
+      d.use("bond2");
+      d.unuse("bond1");
+    } else if (c.is("bond1") && d.is("bond1")) {
+      if (parents[c.id] == d || parents[d.id] == c) return;
+
+      c.use("bond2");
+      d.use("bond2");
+      c.unuse("bond1");
+      d.unuse("bond1");
+      let isParent = findChild(c) != null;
+      if (Object.keys(parents).includes(d.id.toString())) {
+        if (!isParent) {
+          //ischild
+          parents[c.id] = parents[d.id];
+        } else {
+          fixchilds(c, parents[d.id]);
+        }
+
+      } else {
+        fixchilds(c, d);
+        parents[c.id] = d;
+      }
+
+      c.pos.x = d.pos.x - 40;
+      c.pos.y = d.pos.y + 10;
+    }
+    /*else if (c.is("bond2") && d.is("bond1")){
+      //c wants to leave one of its bonds to make a bond with d
+      let isParent = findChild(c) != null;
+      if (isParent){
+        let child = findChild(c);
+        child.use("t");
+        delete parents[child.id];
+        let c2 = findChild(c);
+        parents[c2.id] = child;
+        parents[c.id] = d;
+        c.unuse("t");
+      }
+    }*/
+  });
+
+  onCollide("positive", "positive", (n1, n2) => {
+    let t1 = deltas[n1.id];
+    let t2 = deltas[n2.id];
+    if (t1 == t2) return;
+   // if (t1.is("bond") || t2.is("bond")) return;
+
+    let n1Vec = vec2(n1.pos.x, n1.pos.y)
+    let n2Vec = vec2(n2.pos.x, n2.pos.y)
+    //Force of repulsion exerted from n2 on n1
+    let n1n2 = Vec2.fromAngle(n1Vec.angle(n2Vec))
+    //Vice Versa
+    let n2n1 = Vec2.fromAngle(n2Vec.angle(n1Vec))
+    let p1 = deltas[n1.id]
+    let p2 = deltas[n2.id]
+    if (deltaVecs[p1.id] == undefined) {
+      deltaVecs[p1.id] = [n1n2]
+    }
+    else {
+      let x = deltaVecs[p1.id]
+      x.push(n1n2)
+      deltaVecs[p1.id] = x
+    }
+    if (deltaVecs[p2.id] == undefined) {
+      deltaVecs[p2.id] = [n2n1]
+    }
+    else {
+      let x = deltaVecs[p2.id]
+      x.push(n2n1)
+      deltaVecs[p2.id] = x
+    }
+  })
+
+function complex_bond(p1, p2){
+  if (bonds[p1.id][0] == "head" && bonds[p2.id][0] == "follower"){
+    let p2head = bonds[p2.id][1]
+    bonds[p2.id][1] = p1;
+    if (p2head == undefined){
+      return;
+    }
+    for (let i in bonds){
+      if (bonds[i][0] == "follower" && bonds[i][1] == p2head){
+        bonds[i][1] = p1;
+      } else if (bonds[i][0] == "head" && i == p2head.id){
+        bonds[i] = ["follower", p1, p1.pos.x - p2head.pos.x, p1.pos.y - p2head.pos.y, bonds[i][4]]
+      }
+    }
+  }
+  else if (bonds[p1.id][0] == "follower" && bonds[p2.id][0] == "head"){
+    let p1head = bonds[p1.id][1];
+    bonds[p1.id][1] = p2;
+    for (let i in bonds){
+      if (bonds[i][0] == "follower" && bonds[i][1] == p1head){
+        bonds[i][1] = p2;
+      } else if (bonds[i][0] == "head" && i == p1head.id){
+        bonds[i] = ["follower", p2, p2.pos.x - p1head.pos.x, p2.pos.y - p1head.pos.y, bonds[i][4]]
+      }
+    }
+  }
+  else if (bonds[p1.id][0] == "follower" && bonds[p2.id][0] == "follower"){
+    let p1head = bonds[p1.id][1];
+    let p2head = bonds[p2.id][1];
+    if (p1head.pos == undefined || p2head.pos == undefined){
+      return;
+    }
+    bonds[p2.id][1] = p1head;
+    for (let i in bonds){
+      if (bonds[i][0] == "follower" && bonds[i][1] == p2head){
+        bonds[i][1] = p1head; 
+      }
+      else if (bonds[i][0] == "head" && i == p2head.id){
+        bonds[i] = ["follower", p1head, p1head.pos.x - p2head.pos.x, p1head.pos.y -p2head.pos.y, bonds[i][4]]
+      }
+    }
+  }
+  else if (bonds[p1.id][0] == "head" && bonds[p2.id][0] == "head"){
+    for (let i in bonds){
+      if (bonds[i][0] == "follower" && bonds[i][1] == p2){
+        bonds[i][1] = p1;
+      }
+    }
+    bonds[p2.id] = ["follower", p1, p1.pos.x - p2.pos.x, p1.pos.y - p2.pos.y, bonds[p2.id][4]]
+  }
+}
+
+  onCollide("positive", "negative", (p, n) => {
+    let t1 = deltas[p.id];
+    let t2 = deltas[n.id];
+    let strength = Math.random() * 40 + 4;
+
+    if (t1.is("bond") && !t2.is("bond")){
+      if (bonds[t1.id][0] == "follower"){
+        let head = bonds[t1.id][1];
+        bonds[t2.id] = ["follower", head, head.pos.x - t2.pos.x, head.pos.y - t2.pos.y, strength]
+        bonds[head.id][1] += strength / 2;
+      } else {
+        bonds[t2.id] = ["follower", head, t1.pos.x - t2.pos.x, t1.pos.y - t2.pos.y, strength]
+        bonds[t1.id][1] += strength / 2;
+      }
+    }
+    else if (!t1.is("bond") && t2.is("bond")){
+      if (bonds[t2.id][0] == "follower"){
+        let head = bonds[t2.id][1];
+        bonds[t1.id] = ["follower", head, head.pos.x - t1.pos.x, head.pos.y - t1.pos.y, strength]
+        bonds[head.id][1] += strength / 2;
+      } else {
+        bonds[t1.id] = ["follower", head, t2.pos.x - t1.pos.x, t2.pos.y - t1.pos.y, strength]
+        bonds[t2.id][1] += strength / 2;
+      }
+    } else if (t1.is("bond") && t2.is("bond")){
+      complex_bond(t1,t2);
+    } else {
+    if (t1 == t2) {
+      return
+    }
+      strength = Math.random() * 40 + 4;
+      bonds[t1.id] = ["head", strength]
+      bonds[t2.id] = ["follower", t1, t1.pos.x - t2.pos.x, t1.pos.y - t2.pos.y, strength]
+      t1.use(color(MAGENTA))
+      t2.use(color(YELLOW))
+      t1.use("bond")
+      t2.use("bond")
+  }
+  })
+
+
+  onUpdate("t", (p) => {
+
+    if (p.pos.x > width()- 50){
+      deltaVecs[p.id] = []
+      p.pos.x = width() - 100
+    }
+    if (p.pos.y > height()-50){
+      deltaVecs[p.id] = []
+      p.pos.y = height() - 100
+    }
+    if (p.pos.y < 50){
+      deltaVecs[p.id] = []
+      p.pos.y = 100
+    }
+    if (p.pos.x < 50){
+      deltaVecs[p.id] = []
+      p.pos.x = 100
+    }
+  })
+
+  onCollide("t", "wall", (t,w) => {
+      deltaVecs[t.id] = []
+    if (w.is("top")){
+      t.pos.y += 100
+    }  if (w.is("bottom")){
+      t.pos.y -= 100
+    }  if (w.is("left")){
+      t.pos.x += 100
+    } if (w.is("right")) {
+      t.pos.x -= 100
+    }
+  })
+
+  onCollide("negative", "negative", (n1, n2) => {
+    let t1 = deltas[n1.id];
+    let t2 = deltas[n2.id];
+    if (t1 == t2) return;
+    //if (t1.is("bond") || t2.is("bond")) return;
+    let n1Vec = vec2(n1.pos.x, n1.pos.y)
+    let n2Vec = vec2(n2.pos.x, n2.pos.y)
+    //Force of repulsion exerted from n2 on n1
+    let n1n2 = Vec2.fromAngle(n1Vec.angle(n2Vec))
+    //Vice Versa
+    let n2n1 = Vec2.fromAngle(n2Vec.angle(n1Vec))
+    let p1 = deltas[n1.id]
+    let p2 = deltas[n2.id]
+    if (deltaVecs[p1.id] == undefined) {
+      deltaVecs[p1.id] = [n1n2]
+    }
+    else {
+      let x = deltaVecs[p1.id]
+      for (let i = 0; i < ATTRACT_COEF; i++) {
+        x.push(n1n2)
+      }
+      deltaVecs[p1.id] = x
+    }
+    if (deltaVecs[p2.id] == undefined) {
+      deltaVecs[p2.id] = [n2n1]
+    }
+    else {
+      let x = deltaVecs[p2.id]
+      for (let i = 0; i < ATTRACT_COEF; i++) {
+        x.push(n2n1)
+      }
+      deltaVecs[p2.id] = x
+    }
+  })
+
+
+  function findChild(n) {
+    //check if parent
+    let d = null;
+    let w = Object.values(parents);
+    for (let i = 0; i < w.length; i++) {
+      let u = w[i];
+      if (u.id == n.id) {
+        d = i;
+        break;
+      }
+    }
+    return d;
+  }
+
+
+  function fixchilds(n, z) {
+    let d = null;
+    if (findChild(n)) d = findChild(n);
+    else return null;
+    let u = Object.keys(parents)[d];
+    parents[u.id] = z;
+  }
+
+function norm_move(c){
+        let averageTheta = rand(0, 350);
+        let imp = Vec2.fromAngle(averageTheta).scale(
+          ENERGY,
+        );
+        let a = imp
+        let x = deltaVecs[c.id]
+        if (x != undefined) {
+          for (let i = 0; i < x.length; i++) {
+            let b = x[i]
+            b = b.scale(REPEL_COEF * ENERGY)
+            imp = imp.add(b)
+          }
+        }
+        c.move(imp)
+
+        deltaVecs[c.id] = []
+}
+
+
+  function sim() {
+    onUpdate("particle", (c) => {
+      if (c.is("t")) {
+        if (bonds[c.id] != undefined){
+          let status = bonds[c.id][0];
+          if (status == "follower"){
+            let head = bonds[c.id][1]
+            let newx = head.pos.x - bonds[c.id][2];
+            let newy = head.pos.y - bonds[c.id][3];
+            c.pos.x = newx;
+            c.pos.y = newy;
+          } else {
+            norm_move(c)
+          }
+        }else {
+          norm_move(c)
+        }
+      }
+      else if (c.is("delta")) {
+        let parent = deltas[c.id];
+        c.move(vecs[parent.id]);
+        let theta = deltaThetas[c.id][0];
+        let rng = Math.random();
+        if (rng > 0.5) {
+          rng = 1;
+        } else {
+          rng = -1;
+        }
+        let ntheta = theta + Math.PI / (50 * 1);
+        //let bt = deltaThetas[c.id][1]
+        if (ntheta > 2 * Math.PI) {
+          ntheta -= 2 * Math.PI;
+        }
+        /*let kaz = new vec2(Math.sin(ntheta) * 25, Math.cos(ntheta) * 25);
+        c.move(kaz);*/
+        let newx = (Math.cos(ntheta) * 100) + parent.pos.x
+        let newy = (Math.sin(ntheta) * 100) + parent.pos.y
+        c.pos.x = newx;
+        c.pos.y = newy;
+        //c.use(rotate(bt - .58))
+        //debug.log(ntheta)
+        //debug.log(parent.angle)
+        //c.use(rotate(ntheta * -57.2958 + 50));
+        // deltaThetas[c.id][0] = ntheta;
+        //deltaThetas[c.id][1] = bt - .58;
+      }
+    });
+  }
+
+  sim();
+
+</script>
+
+</html>
